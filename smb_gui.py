@@ -306,7 +306,7 @@ def main():
         # 开启debug模式以便调试
         # PyWebView会在页面加载完成后自动让前端JavaScript运行
         # 前端的waitForPyWebView()函数会检测API何时可用
-        webview.start(debug=True)
+        webview.start(debug=False)
     except Exception as e:
         print(f"[ERROR] 启动失败: {e}")
         sys.exit(1)
