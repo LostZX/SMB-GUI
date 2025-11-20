@@ -1,0 +1,2077 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMB客户端 - 文件管理器</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+            background: #f5f5f5;
+        }
+
+        /* 登录界面 */
+        .login-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .login-card {
+            background: white;
+            border-radius: 20px;
+            padding: 50px 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 450px;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .login-header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .login-header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 0.95em;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #fafafa;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 8px;
+            color: #888;
+            font-size: 0.85em;
+        }
+
+        .btn {
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 40px;
+            min-width: 80px;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            margin: 0 2px;
+            padding: 8px 12px;
+            min-height: 36px;
+            min-width: 70px;
+            font-size: 12px;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+            margin: 0 2px;
+            padding: 8px 12px;
+            min-height: 36px;
+            min-width: 70px;
+            font-size: 12px;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+            margin: 0 2px;
+            padding: 8px 12px;
+            min-height: 36px;
+            min-width: 70px;
+            font-size: 12px;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+            margin: 0 2px;
+            padding: 8px 12px;
+            min-height: 36px;
+            min-width: 70px;
+            font-size: 12px;
+        }
+
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+            margin: 0 2px;
+            padding: 8px 12px;
+            min-height: 36px;
+            min-width: 70px;
+            font-size: 12px;
+        }
+        
+        /* 统一文件操作按钮样式 */
+        .file-actions .btn-secondary,
+        .file-actions .btn-success,
+        .file-actions .btn-danger,
+        .file-actions .btn-info,
+        .file-actions .btn-primary {
+            margin: 0;
+            padding: 6px 12px;
+            min-height: 32px;
+            min-width: 70px;
+            font-size: 11px;
+            justify-content: flex-start;
+            box-shadow: none;
+            transform: none;
+            transition: all 0.3s ease;
+        }
+        
+        .file-actions .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+        }
+
+        /* 统一文件操作按钮大小 */
+        .file-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            white-space: nowrap;
+        }
+        
+        .file-actions .btn {
+            margin: 0;
+            padding: 6px 12px;
+            min-height: 32px;
+            min-width: 20px;
+            font-size: 11px;
+            justify-content: flex-start;
+            border-radius: 8px;
+            display: flex;
+        }
+
+        .alert {
+            border-radius: 10px;
+            padding: 15px 20px;
+            margin: 15px 0;
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* 文件浏览器界面 */
+        .main-app {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 1.8em;
+            font-weight: 300;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .connection-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+
+        .app-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: white;
+            border-right: 1px solid #e1e5e9;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #e1e5e9;
+            background: #f8f9fa;
+        }
+
+        .sidebar-header h3 {
+            color: #333;
+            font-size: 1.1em;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .shares-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .share-item {
+            padding: 12px 15px;
+            margin: 5px 0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .share-item:hover {
+            background: #e3f2fd;
+            transform: translateX(5px);
+        }
+
+        .share-item.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .content-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: white;
+        }
+
+        .toolbar {
+            padding: 20px 30px;
+            border-bottom: 1px solid #e1e5e9;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8f9fa;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .breadcrumb-item {
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .breadcrumb-item:hover {
+            color: #667eea;
+        }
+
+        .toolbar-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .file-browser {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .file-table-container {
+            flex: 1;
+            overflow: auto;
+            padding: 20px 30px;
+        }
+
+        .file-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            table-layout: auto;
+        }
+
+        .file-table thead {
+            background: #f8f9fa;
+            border-bottom: 2px solid #e1e5e9;
+        }
+
+        .file-table th {
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        .file-table tbody tr {
+            border-bottom: 1px solid #e1e5e9;
+            transition: all 0.3s ease;
+        }
+
+        .file-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .file-table td {
+            padding: 12px 15px;
+            color: #333;
+            max-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-table td:nth-child(1) {
+            /* 文件名列允许换行 */
+            white-space: normal;
+            word-wrap: break-word;
+            min-width: 200px;
+        }
+
+        .file-table td:nth-child(2) {
+            /* 大小列 */
+            min-width: 80px;
+            text-align: right;
+        }
+
+        .file-table td:nth-child(3) {
+            /* 类型列 */
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .file-table td:nth-child(4) {
+            /* 修改时间列 */
+            min-width: 150px;
+            text-align: center;
+        }
+
+        .file-table td:nth-child(5) {
+            /* 操作列 */
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .file-icon {
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+
+        .file-icon.folder {
+            color: #ffc107;
+        }
+
+        .file-icon.file {
+            color: #6c757d;
+        }
+
+        .file-name {
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+
+        .file-name:hover {
+            color: #667eea;
+        }
+
+        .file-size {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .file-modified {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            gap: 10px;
+            border-top: 1px solid #e1e5e9;
+            background: #f8f9fa;
+        }
+
+        .page-btn {
+            padding: 8px 15px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .page-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .page-info {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        /* 上传模态框 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            animation: modalSlideIn 0.3s ease-out;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            color: #333;
+            font-size: 1.3em;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5em;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .close-btn:hover {
+            color: #333;
+        }
+
+        .file-drop-area {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .file-drop-area:hover {
+            border-color: #667eea;
+            background: #f8f9fa;
+        }
+
+        .file-drop-area.dragover {
+            border-color: #667eea;
+            background: #e3f2fd;
+        }
+
+        .upload-preview {
+            margin-top: 20px;
+        }
+
+        .upload-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #e1e5e9;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar {
+            width: 200px;
+            height: 6px;
+            background: #e1e5e9;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            transition: width 0.3s ease;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .login-card {
+                margin: 20px;
+                max-width: none;
+                padding: 40px 30px;
+            }
+            
+            .sidebar {
+                width: 250px;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+            
+            .toolbar {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .file-table {
+                font-size: 0.85em;
+            }
+            
+            .file-table th,
+            .file-table td {
+                padding: 8px 10px;
+            }
+            
+            .file-table td:nth-child(1) {
+                min-width: 150px;
+            }
+            
+            .file-table td:nth-child(2),
+            .file-table td:nth-child(3) {
+                min-width: 60px;
+            }
+            
+            .file-table td:nth-child(4) {
+                min-width: 120px;
+            }
+            
+            .file-table td:nth-child(5) {
+                min-width: 60px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .login-card {
+                margin: 10px;
+                padding: 30px 20px;
+            }
+            
+            .login-header h1 {
+                font-size: 1.8em;
+            }
+            
+            .login-header p {
+                font-size: 0.9em;
+            }
+            
+            .file-table th,
+            .file-table td {
+                padding: 6px 8px;
+                font-size: 0.8em;
+            }
+            
+            .file-table th:nth-child(4),
+            .file-table td:nth-child(4) {
+                display: none; /* 隐藏修改时间列 */
+            }
+            
+            .app-body {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                height: 200px;
+                border-right: none;
+                border-bottom: 1px solid #e1e5e9;
+            }
+            
+            .file-actions {
+                flex-direction: column;
+            }
+        }
+
+        /* 加载动画 */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .empty-state i {
+            font-size: 4em;
+            margin-bottom: 20px;
+            color: #ddd;
+        }
+
+        .empty-state h3 {
+            font-size: 1.3em;
+            margin-bottom: 10px;
+            color: #999;
+        }
+
+        .empty-state p {
+            color: #bbb;
+        }
+    </style>
+</head>
+<body>
+    <!-- 登录界面 -->
+    <div id="loginPage" class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <h1><i class="fas fa-network-wired"></i> SMB Client</h1>
+                <p>安全的网络文件管理工具</p>
+            </div>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="connectionString">
+                        <i class="fas fa-link"></i> SMB连接字符串
+                    </label>
+                    <input type="text" id="connectionString" name="connectionString" required
+                           placeholder="例如: administrator:123456@192.168.10.3"
+                           value="administrator:123456@192.168.10.3">
+                    <small>
+                        支持格式:<br>
+                        • username:password@server<br>
+                        • DOMAIN\\username:password@server<br>
+                        • username:password@server:port<br>
+                        • DOMAIN\\username:password@server:port
+                    </small>
+                </div>
+                
+                                    
+                                    
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-sign-in-alt"></i> 连接
+                </button>
+                
+                <div id="error" class="alert alert-error"></div>
+                <div id="success" class="alert alert-success"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 文件浏览器界面 -->
+    <div id="browserPage" class="app-container hidden">
+        <div class="main-app">
+            <header class="header">
+                <h1>
+                    <i class="fas fa-folder-open"></i>
+                    SMB 文件管理器
+                </h1>
+                <div class="connection-info">
+                    <i class="fas fa-network-wired"></i>
+                    <span id="connectionInfo">未连接</span>
+                </div>
+            </header>
+            
+            <div class="app-body">
+                <!-- 侧边栏 -->
+                <aside class="sidebar">
+                    <div class="sidebar-header">
+                        <h3>
+                            <i class="fas fa-share-alt"></i>
+                            网络共享
+                        </h3>
+                    </div>
+                    <div class="shares-list" id="sharesList">
+                        <div class="share-item active">
+                            <i class="fas fa-sync-alt loading"></i>
+                            <span>加载共享列表中...</span>
+                        </div>
+                    </div>
+                </aside>
+                
+                <!-- 主内容区域 -->
+                <main class="content-area">
+                    <div class="toolbar">
+                        <div class="breadcrumb" id="breadcrumb">
+                            <i class="fas fa-home breadcrumb-item"></i>
+                            <span>/</span>
+                        </div>
+                        
+                        <div class="toolbar-buttons">
+                            <button id="refreshBtn" class="btn btn-info">
+                                <i class="fas fa-sync-alt"></i> 刷新
+                            </button>
+                            <button id="uploadBtn" class="btn btn-success">
+                                <i class="fas fa-upload"></i> 上传
+                            </button>
+                            <button id="disconnectBtn" class="btn btn-danger">
+                                <i class="fas fa-sign-out-alt"></i> 断开
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="file-browser">
+                        <div class="file-table-container">
+                            <table class="file-table">
+                                <thead>
+                                    <tr>
+                                        <th width="40%">名称</th>
+                                        <th width="20%">大小</th>
+                                        <th width="20%">类型</th>
+                                        <th width="20%">修改时间</th>
+                                        <th width="20%">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="fileTableBody">
+                                    <tr>
+                                        <td colspan="5">
+                                            <div class="empty-state">
+                                                <i class="fas fa-folder-open"></i>
+                                                <h3>欢迎使用SMB文件管理器</h3>
+                                                <p>请从左侧选择一个共享文件夹</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="pagination" id="pagination">
+                            <button class="page-btn" id="prevBtn" disabled>
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <span class="page-info">第 1 页，共 1 页</span>
+                            <button class="page-btn" id="nextBtn" disabled>
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <!-- 上传文件模态框 -->
+    <div id="uploadModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-upload"></i> 上传文件</h3>
+                <button class="close-btn" onclick="closeUploadModal()">&times;</button>
+            </div>
+            <div class="file-drop-area" id="dropArea">
+                <i class="fas fa-cloud-upload-alt" style="font-size: 3em; color: #667eea; margin-bottom: 15px;"></i>
+                <h3>拖拽文件到此处上传</h3>
+                <p>或者</p>
+                <input type="file" id="fileInput" multiple style="display: none;">
+                <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                    选择文件
+                </button>
+            </div>
+            <div class="upload-preview" id="uploadPreview"></div>
+            <div style="margin-top: 20px; text-align: right;">
+                <button class="btn btn-secondary" onclick="closeUploadModal()">取消</button>
+                <button class="btn btn-primary" onclick="startUpload()">
+                    <i class="fas fa-upload"></i> 开始上传
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let currentShare = null;
+        let currentPath = '\\';
+        let currentPage = 1;
+        let itemsPerPage = 10;
+        let allFiles = [];
+        let connectionInfo = {};
+
+        // DOM元素
+        const elements = {
+            loginPage: document.getElementById('loginPage'),
+            browserPage: document.getElementById('browserPage'),
+            loginForm: document.getElementById('loginForm'),
+            error: document.getElementById('error'),
+            success: document.getElementById('success'),
+            connectionInfo: document.getElementById('connectionInfo'),
+            sharesList: document.getElementById('sharesList'),
+            fileTableBody: document.getElementById('fileTableBody'),
+            breadcrumb: document.getElementById('breadcrumb'),
+            pagination: document.getElementById('pagination'),
+            uploadModal: document.getElementById('uploadModal'),
+            dropArea: document.getElementById('dropArea'),
+            fileInput: document.getElementById('fileInput'),
+            uploadPreview: document.getElementById('uploadPreview')
+        };
+
+        // 连接方式切换
+        function toggleConnectionType() {
+            const connectionType = document.getElementById('connectionType').value;
+            const manualForm = document.getElementById('manualForm');
+            const connectionStringForm = document.getElementById('connectionStringForm');
+            const manualAuth = document.getElementById('manualAuth');
+            
+            if (connectionType === 'manual') {
+                manualForm.classList.remove('hidden');
+                connectionStringForm.classList.add('hidden');
+                manualAuth.style.display = 'block';
+                document.getElementById('server').required = true;
+                document.getElementById('connectionString').required = false;
+            } else {
+                manualForm.classList.add('hidden');
+                connectionStringForm.classList.remove('hidden');
+                manualAuth.style.display = 'none';
+                document.getElementById('server').required = false;
+                document.getElementById('connectionString').required = true;
+            }
+        }
+
+        // 认证方式切换
+        function toggleAuthType() {
+            const authType = document.getElementById('authType').value;
+            const passwordGroup = document.getElementById('passwordGroup');
+            const hashGroup = document.getElementById('hashGroup');
+            
+            if (authType === 'password') {
+                passwordGroup.classList.remove('hidden');
+                hashGroup.classList.add('hidden');
+                document.getElementById('password').required = false;
+                document.getElementById('hash').required = false;
+            } else {
+                passwordGroup.classList.add('hidden');
+                hashGroup.classList.remove('hidden');
+                document.getElementById('password').required = false;
+                document.getElementById('hash').required = true;
+            }
+        }
+
+        // 显示错误/成功消息
+        function showError(message, duration = 5000) {
+            elements.error.textContent = message;
+            elements.error.style.display = 'block';
+            elements.success.style.display = 'none';
+            
+            if (duration > 0) {
+                setTimeout(() => {
+                    elements.error.style.display = 'none';
+                }, duration);
+            }
+        }
+
+        function showSuccess(message, duration = 3000) {
+            elements.success.textContent = message;
+            elements.success.style.display = 'block';
+            elements.error.style.display = 'none';
+            
+            if (duration > 0) {
+                setTimeout(() => {
+                    elements.success.style.display = 'none';
+                }, duration);
+            }
+        }
+
+        // 处理登录表单提交
+        elements.loginForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // 检查PyWebView是否可用
+            if (!checkPyWebViewReady()) {
+                showError('系统未就绪，请稍后再试');
+                return;
+            }
+            
+            const formData = new FormData(this);
+            const connectionString = formData.get('connectionString');
+            
+            // 直接使用连接字符串
+            const data = {
+                connection_string: connectionString
+            };
+            
+            // 显示加载状态
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalContent = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 连接中...';
+            submitBtn.disabled = true;
+            
+            try {
+                console.log('🔗 [前端调用] 准备调用 pywebview.api.connect');
+                console.log('🔗 [前端调用] 参数:', data.connection_string);
+                const result = await pywebview.api.connect(data.connection_string);
+                console.log('🔗 [前端调用] pywebview.api.connect 返回:', result);
+                
+                if (result.success) {
+                    showSuccess('连接成功！正在加载...');
+                    
+                    // 保存连接信息
+                    connectionInfo = data;
+                    
+                    setTimeout(() => {
+                        showBrowserPage();
+                    }, 1000);
+                } else {
+                    showError(result.error || '连接失败');
+                }
+            } catch (error) {
+                showError('连接错误: ' + error.message);
+            } finally {
+                submitBtn.innerHTML = originalContent;
+                submitBtn.disabled = false;
+            }
+        });
+
+        // 显示文件浏览器页面
+        function showBrowserPage() {
+            elements.loginPage.classList.add('hidden');
+            elements.browserPage.classList.remove('hidden');
+            
+            // 更新连接信息显示
+            if (connectionInfo.connection_string) {
+                elements.connectionInfo.textContent = connectionInfo.connection_string;
+            } else {
+                const server = connectionInfo.server || 'Unknown';
+                const username = connectionInfo.username || 'Anonymous';
+                elements.connectionInfo.textContent = `${username}@${server}`;
+            }
+            
+            // 加载共享列表
+            loadShares();
+        }
+
+        // 显示登录页面
+        function showLoginPage() {
+            elements.browserPage.classList.add('hidden');
+            elements.loginPage.classList.remove('hidden');
+        }
+
+        // 加载共享列表
+        async function loadShares() {
+            console.log('开始加载共享列表...');
+            elements.sharesList.innerHTML = '<div class="share-item"><i class="fas fa-sync-alt loading"></i><span>加载共享列表中...</span></div>';
+            
+            try {
+                console.log('📁 [前端调用] 准备调用 pywebview.api.list_files');
+                console.log('📁 [前端调用] 参数: \\\\\\\\');
+                const result = await pywebview.api.list_files('\\\\');
+                console.log('📁 [前端调用] pywebview.api.list_files 返回:', result);
+                
+                if (result.success) {
+                    console.log('共享列表加载成功，共享数量:', result.files ? result.files.length : 0);
+                    displayShares(result.files);
+                } else {
+                    console.error('共享列表加载失败:', result.error);
+                    elements.sharesList.innerHTML = `<div class="share-item"><i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i><span>加载失败: ${result.error}</span></div>`;
+                }
+            } catch (error) {
+                console.error('共享列表网络错误:', error);
+                elements.sharesList.innerHTML = '<div class="share-item"><i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i><span>网络错误: ' + error.message + '</span></div>';
+            }
+        }
+
+        // 显示共享列表
+        function displayShares(shares) {
+            console.log('开始显示共享列表，共享数量:', shares ? shares.length : 0);
+            console.log('共享列表详情:', shares);
+            
+            if (!shares || shares.length === 0) {
+                console.log('没有找到共享，显示空状态');
+                elements.sharesList.innerHTML = '<div class="share-item"><i class="fas fa-info-circle"></i><span>没有找到共享</span></div>';
+                return;
+            }
+            
+            const html = shares.map((share, index) => {
+                console.log(`处理共享 ${index + 1}:`, share);
+                return `
+                    <div class="share-item" onclick="selectShare('${share.name}', '${share.name}')" title="类型: ${share.type || '未知'}\n属性: ${share.attributes || '无'}">
+                        <i class="fas fa-share-alt ${share.is_directory ? 'folder' : 'file'}"></i>
+                        <span>${share.name}</span>
+                    </div>
+                `;
+            }).join('');
+            
+            console.log('共享列表HTML生成完成');
+            elements.sharesList.innerHTML = html;
+            console.log('共享列表显示完成');
+        }
+
+        // 选择共享
+        function selectShare(shareName, displayName) {
+            console.log('选择共享:', shareName, displayName);
+            currentShare = shareName;
+            currentPath = '\\' + shareName; // 直接设置为共享路径
+            currentPage = 1;
+            
+            // 更新侧边栏选中状态
+            document.querySelectorAll('.share-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            if (event && event.target) {
+                const shareItem = event.target.closest('.share-item');
+                if (shareItem) {
+                    shareItem.classList.add('active');
+                }
+            }
+            
+            console.log('开始加载共享文件列表，路径:', currentPath);
+            // 加载共享内的文件列表
+            loadFiles(currentPath);
+            
+            // 更新面包屑
+            updateBreadcrumb();
+        }
+
+        // 加载文件列表
+        async function loadFiles(path) {
+            console.log('开始加载文件列表，路径:', path);
+            console.log('当前共享:', currentShare);
+            
+            // 显示加载状态
+            elements.fileTableBody.innerHTML = '<tr><td colspan="5"><div style="text-align: center; padding: 40px;"><i class="fas fa-sync-alt loading"></i> 加载中...</div></td></tr>';
+            
+            try {
+                console.log('📁 [前端调用] 准备调用 pywebview.api.list_files');
+                console.log('📁 [前端调用] 参数:', path);
+                const result = await pywebview.api.list_files(path);
+                console.log('📁 [前端调用] pywebview.api.list_files 返回:', result);
+                
+                if (result.success) {
+                    console.log('文件列表加载成功，文件数量:', result.files ? result.files.length : 0);
+                    if (result.files) {
+                        console.log('前5个文件:', result.files.slice(0, 5));
+                    }
+                    allFiles = result.files || [];
+                    // 文件夹前置排序
+                    allFiles.sort((a, b) => {
+                        // 文件夹优先
+                        if (a.is_directory && !b.is_directory) return -1;
+                        if (!a.is_directory && b.is_directory) return 1;
+                        // 同类型按名称排序
+                        return a.name.localeCompare(b.name);
+                    });
+                    displayFiles();
+                } else {
+                    console.error('文件列表加载失败:', result.error);
+                    elements.fileTableBody.innerHTML = `<tr><td colspan="5"><div style="text-align: center; padding: 40px; color: #dc3545;"><i class="fas fa-exclamation-triangle"></i> 加载失败: ${result.error}</div></td></tr>`;
+                }
+            } catch (error) {
+                console.error('文件列表网络错误:', error);
+                elements.fileTableBody.innerHTML = '<tr><td colspan="5"><div style="text-align: center; padding: 40px; color: #dc3545;"><i class="fas fa-exclamation-triangle"></i> 网络错误: ' + error.message + '</div></td></tr>';
+            }
+        }
+
+        // 显示文件列表（带分页）
+        function displayFiles() {
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const pageFiles = allFiles.slice(startIndex, endIndex);
+            
+            if (pageFiles.length === 0 && allFiles.length === 0) {
+                elements.fileTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="5">
+                            <div class="empty-state">
+                                <i class="fas fa-folder-open"></i>
+                                <h3>文件夹为空</h3>
+                                <p>此文件夹中没有文件或子文件夹</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                updatePagination(0);
+                return;
+            }
+            
+            if (pageFiles.length === 0 && currentPage > 1) {
+                currentPage--;
+                displayFiles();
+                return;
+            }
+            
+            const html = pageFiles.map(file => {
+                const icon = file.is_directory ? 'folder' : 'file';
+                const typeText = file.is_directory ? '文件夹' : '文件';
+                
+                return `
+                    <tr>
+                        <td>
+                            <div class="file-name" onclick="${file.is_directory ? `navigateToDirectory('${file.name}')` : `handleFileClick('${file.name}', ${file.size})`}">
+                                <i class="fas fa-${icon} file-icon ${icon}"></i>
+                                ${file.name}
+                            </div>
+                        </td>
+                        <td>
+                            <span class="file-size">${file.is_directory ? '-' : formatFileSize(file.size)}</span>
+                        </td>
+                        <td>
+                            <span class="file-size">${typeText}</span>
+                        </td>
+                        <td>
+                            <span class="file-modified">${file.modified_time || '-'}</span>
+                        </td>
+                        <td>
+                            <div class="file-actions">
+                                <button class="btn btn-primary" onclick="handleFileAction('${file.name}', ${file.is_directory})" title="查看">
+                                    <i class="fas fa-${file.is_directory ? 'folder-open' : 'eye'}"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            elements.fileTableBody.innerHTML = html;
+            updatePagination(allFiles.length);
+        }
+
+        // 导航到目录
+        function navigateToDirectory(dirName) {
+            if (dirName === '..') {
+                currentPath = getParentPath(currentPath);
+            } else {
+                currentPath = currentPath.endsWith('\\') ? 
+                    currentPath + dirName : currentPath + '\\' + dirName;
+            }
+            
+            currentPage = 1;
+            loadFiles(currentPath);
+            updateBreadcrumb();
+        }
+
+        // 统一处理文件操作
+        function handleFileAction(fileName, isDirectory) {
+            if (isDirectory) {
+                // 如果是文件夹，则进入目录
+                navigateToDirectory(fileName);
+            } else {
+                // 如果是文件，则显示操作选项（下载、查看详情等）
+                showFileActionMenu(fileName);
+            }
+        }
+        
+        // 处理文件点击事件
+        function handleFileClick(fileName, fileSize) {
+            const canView = isViewableFile(fileName, fileSize);
+            
+            if (canView) {
+                // 可查看文件直接弹出查看框
+                viewFileContent(fileName);
+            } else {
+                // 不可查看文件显示提示
+                let reason = '';
+                if (fileSize > 2 * 1024 * 1024) {
+                    reason = '文件过大（超过2MB）';
+                } else {
+                    reason = '文件类型不支持在线预览';
+                }
+                showTempMessage(`文件${reason}，建议下载到本地查看`, 2000);
+            }
+        }
+        
+        // 显示临时消息（2秒后自动消失）
+        function showTempMessage(message, duration = 2000) {
+            // 创建消息元素
+            const messageEl = document.createElement('div');
+            messageEl.className = 'temp-message';
+            messageEl.textContent = message;
+            messageEl.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #ff9800;
+                color: white;
+                padding: 12px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                z-index: 10000;
+                font-size: 14px;
+                max-width: 300px;
+                word-wrap: break-word;
+            `;
+            
+            document.body.appendChild(messageEl);
+            
+            // 动画效果
+            setTimeout(() => {
+                messageEl.style.transition = 'opacity 0.3s ease';
+                messageEl.style.opacity = '0.9';
+            }, 10);
+            
+            // 定时移除
+            setTimeout(() => {
+                if (messageEl.parentNode) {
+                    messageEl.style.opacity = '0';
+                    setTimeout(() => {
+                        if (messageEl.parentNode) {
+                            document.body.removeChild(messageEl);
+                        }
+                    }, 300);
+                }
+            }, duration);
+        }
+
+        // 显示文件操作菜单
+        function showFileActionMenu(fileName) {
+            // 检查文件大小和类型
+            const file = allFiles.find(f => f.name === fileName);
+            if (!file) return;
+            
+            const canView = isViewableFile(fileName, file.size);
+            
+            let options = '';
+            if (canView) {
+                options += `<button class="btn btn-success" onclick="viewFileContent('${fileName}')">
+                    <i class="fas fa-eye"></i> 查看
+                </button>`;
+            } else {
+                // 文件不可查看时显示提示
+                let reason = '';
+                if (file.size > 2 * 1024 * 1024) {
+                    reason = '文件过大';
+                } else {
+                    reason = '文件类型不支持预览';
+                }
+                options += `<button class="btn btn-secondary" onclick="alert('文件${reason}，建议下载到本地查看')" title="${reason}">
+                    <i class="fas fa-eye-slash"></i> 查看
+                </button>`;
+            }
+            options += `<button class="btn btn-primary" onclick="downloadFile('${fileName}')">
+                <i class="fas fa-download"></i> 下载
+            </button>`;
+            options += `<button class="btn btn-info" onclick="viewFileInfo('${fileName}')">
+                <i class="fas fa-info-circle"></i> 详情
+            </button>`;
+            
+            // 简单的模态框显示选项
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                background: white; padding: 20px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                z-index: 1000; max-width: 400px; text-align: center;
+            `;
+            modal.innerHTML = `
+                <h3>文件操作: ${fileName}</h3>
+                <p>大小: ${formatFileSize(file.size)}</p>
+                <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                    ${options}
+                </div>
+                <button class="btn btn-secondary" onclick="this.parentElement.parentElement.remove()" style="margin-top: 10px;">
+                    取消
+                </button>
+            `;
+            
+            // 添加背景遮罩
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 999;';
+            
+            // 安全移除模态框的函数
+            const safeRemoveModal = () => {
+                try {
+                    if (overlay && overlay.parentNode) {
+                        overlay.parentNode.removeChild(overlay);
+                    }
+                    if (modal && modal.parentNode) {
+                        modal.parentNode.removeChild(modal);
+                    }
+                } catch (e) {
+                    console.warn('移除模态框时出错:', e);
+                }
+            };
+            
+            overlay.onclick = safeRemoveModal;
+            
+            document.body.appendChild(overlay);
+            document.body.appendChild(modal);
+            
+            // 修改取消按钮的点击事件
+            setTimeout(() => {
+                const cancelBtn = modal.querySelector('button[onclick*="remove"]');
+                if (cancelBtn) {
+                    cancelBtn.onclick = safeRemoveModal;
+                }
+            }, 100);
+        }
+
+        // 检查文件是否可查看
+        function isViewableFile(fileName, fileSize) {
+            // 检查文件大小，如果大于2MB则不建议在线查看
+            const MAX_VIEW_SIZE = 2 * 1024 * 1024; // 2MB
+            if (fileSize > MAX_VIEW_SIZE) {
+                return false;
+            }
+            
+            const extension = fileName.toLowerCase().split('.').pop();
+            const viewableExtensions = ['txt', 'log', 'ini', 'conf', 'md', 'json', 'xml', 'csv', 
+                                       'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'jsp', 'jspx', 'html', 'py', 'sh', 'js', 'css', 'bat'];
+            
+            return viewableExtensions.includes(extension);
+        }
+
+        // 下载文件
+        async function downloadFile(fileName) {
+            if (!currentShare) {
+                showError('请先选择一个共享文件夹');
+                return;
+            }
+            
+            try {
+                showSuccess('开始下载文件...');
+                console.log('下载文件 - 当前共享:', currentShare, '当前路径:', currentPath, '文件名:', fileName);
+                
+                // 构造正确的文件路径
+                let filePath;
+                if (currentPath === '\\') {
+                    // 根目录，直接使用文件名
+                    filePath = fileName;
+                } else if (currentPath.startsWith('\\' + currentShare)) {
+                    // 如果当前路径包含共享名，则提取相对路径
+                    const relativePath = currentPath.substring(('\\' + currentShare).length).replace(/^\\+/, '');
+                    filePath = relativePath ? relativePath + '\\' + fileName : fileName;
+                } else {
+                    // 否则直接拼接
+                    const cleanPath = currentPath.replace(/^\\+/, '').replace(/\\+$/, '');
+                    filePath = cleanPath ? cleanPath + '\\' + fileName : fileName;
+                }
+                
+                console.log('构造的文件路径:', filePath);
+                
+                // 调用后端下载API (保存到download目录)
+                console.log('⬇️ [前端调用] 准备调用 pywebview.api.download_file (保存到download目录)');
+                console.log('⬇️ [前端调用] 参数:', { currentShare, filePath });
+                const result = await pywebview.api.download_file(currentShare, filePath, null, true);
+                console.log('⬇️ [前端调用] pywebview.api.download_file 返回:', result);
+                
+                if (result.success) {
+                    // 显示更详细的下载成功信息
+                    const message = `文件 "${fileName}" 下载成功！\n\n保存位置: ${result.local_path || 'download目录'}\n文件大小: ${formatFileSize(result.size || 0)}`;
+                    showSuccess(message);
+                } else {
+                    showError(`下载失败: ${result.error}`);
+                }
+            } catch (error) {
+                showError(`下载错误: ${error.message}`);
+            }
+        }
+
+        // 查看文件内容
+        async function viewFileContent(fileName) {
+            if (!currentShare) {
+                showError('请先选择一个共享文件夹');
+                return;
+            }
+            
+            try {
+                console.log('查看文件 - 当前共享:', currentShare, '当前路径:', currentPath, '文件名:', fileName);
+                
+                // 构造正确的文件路径
+                let filePath;
+                if (currentPath === '\\') {
+                    // 根目录，直接使用文件名
+                    filePath = fileName;
+                } else if (currentPath.startsWith('\\' + currentShare)) {
+                    // 如果当前路径包含共享名，则提取相对路径
+                    const relativePath = currentPath.substring(('\\' + currentShare).length).replace(/^\\+/, '');
+                    filePath = relativePath ? relativePath + '\\' + fileName : fileName;
+                } else {
+                    // 否则直接拼接
+                    const cleanPath = currentPath.replace(/^\\+/, '').replace(/\\+$/, '');
+                    filePath = cleanPath ? cleanPath + '\\' + fileName : fileName;
+                }
+                
+                console.log('构造的文件路径:', filePath);
+                
+                console.log('👁️ [前端调用] 准备调用 pywebview.api.download_file (查看内容)');
+                console.log('👁️ [前端调用] 参数:', { currentShare, filePath });
+                const result = await pywebview.api.download_file(currentShare, filePath);
+                console.log('👁️ [前端调用] pywebview.api.download_file (查看内容) 返回:', result);
+                
+                if (result.success) {
+                    // 如果是Base64数据，需要转换回ArrayBuffer
+                    let fileData;
+                    if (typeof result.data === 'string') {
+                        // Base64字符串转换为ArrayBuffer
+                        const binaryString = atob(result.data);
+                        const bytes = new Uint8Array(binaryString.length);
+                        for (let i = 0; i < binaryString.length; i++) {
+                            bytes[i] = binaryString.charCodeAt(i);
+                        }
+                        fileData = bytes.buffer;
+                    } else {
+                        fileData = result.data;
+                    }
+                    
+                    // 创建文件内容查看器
+                    showFileViewer(fileName, fileData);
+                } else {
+                    showError('查看文件失败: ' + result.error);
+                }
+            } catch (error) {
+                console.error('查看文件错误:', error);
+                showError('查看文件时发生错误: ' + error.message);
+            }
+        }
+
+        // 显示文件内容查看器
+        function showFileViewer(fileName, fileData) {
+            const extension = fileName.toLowerCase().split('.').pop();
+            let content = '';
+            
+            if (['txt', 'log', 'ini', 'conf', 'md', 'json', 'xml', 'csv', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'jsp', 'jspx', 'html', 'py', 'sh', 'js', 'css', 'bat'].includes(extension)) {
+                // 文本文件
+                try {
+                    content = new TextDecoder('utf-8').decode(fileData);
+                } catch (e) {
+                    content = '文件编码无法识别或文件过大';
+                }
+                
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                    background: white; padding: 20px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                    z-index: 1000; max-width: 80vw; max-height: 80vh; overflow: auto;
+                `;
+                modal.innerHTML = `
+                    <h3>文件内容: ${fileName}</h3>
+                    <pre style="background: #f8f9fa; padding: 15px; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; max-height: 400px; overflow: auto;">${content}</pre>
+                    <button class="btn btn-primary" onclick="this.parentElement.parentElement.remove()" style="margin-top: 10px;">
+                        关闭
+                    </button>
+                `;
+                
+                // 添加背景遮罩
+                const overlay = document.createElement('div');
+                overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 999;';
+                
+                // 安全移除模态框的函数
+                const safeRemoveModal = () => {
+                    try {
+                        if (overlay && overlay.parentNode) {
+                            overlay.parentNode.removeChild(overlay);
+                        }
+                        if (modal && modal.parentNode) {
+                            modal.parentNode.removeChild(modal);
+                        }
+                    } catch (e) {
+                        console.warn('移除文本查看器时出错:', e);
+                    }
+                };
+                
+                overlay.onclick = safeRemoveModal;
+                
+                document.body.appendChild(overlay);
+                document.body.appendChild(modal);
+                
+                // 修改关闭按钮的点击事件
+                setTimeout(() => {
+                    const closeBtn = modal.querySelector('button[onclick*="remove"]');
+                    if (closeBtn) {
+                        closeBtn.onclick = safeRemoveModal;
+                    }
+                }, 100);
+                
+            } else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension)) {
+                // 图片文件
+                const blob = new Blob([fileData]);
+                const url = URL.createObjectURL(blob);
+                
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                    background: white; padding: 20px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                    z-index: 1000; max-width: 90vw; max-height: 90vh; text-align: center;
+                `;
+                modal.innerHTML = `
+                    <h3>图片: ${fileName}</h3>
+                    <img src="${url}" style="max-width: 100%; max-height: 60vh; object-fit: contain;">
+                    <br><button class="btn btn-primary" onclick="this.parentElement.parentElement.remove(); URL.revokeObjectURL(this.previousElementSibling.src)" style="margin-top: 10px;">
+                        关闭
+                    </button>
+                `;
+                
+                // 添加背景遮罩
+                const overlay = document.createElement('div');
+                overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 999;';
+                
+                // 安全移除模态框的函数
+                const safeRemoveModal = () => {
+                    try {
+                        if (url) {
+                            URL.revokeObjectURL(url);
+                        }
+                        if (overlay && overlay.parentNode) {
+                            overlay.parentNode.removeChild(overlay);
+                        }
+                        if (modal && modal.parentNode) {
+                            modal.parentNode.removeChild(modal);
+                        }
+                    } catch (e) {
+                        console.warn('移除图片查看器时出错:', e);
+                    }
+                };
+                
+                overlay.onclick = safeRemoveModal;
+                
+                document.body.appendChild(overlay);
+                document.body.appendChild(modal);
+                
+                // 修改关闭按钮的点击事件
+                setTimeout(() => {
+                    const closeBtn = modal.querySelector('button[onclick*="remove"]');
+                    if (closeBtn) {
+                        closeBtn.onclick = safeRemoveModal;
+                    }
+                }, 100);
+                
+            } else {
+                // 其他类型文件提示下载
+                alert('此文件类型不支持在线预览，请下载后查看');
+            }
+        }
+
+        // 查看文件信息
+        async function viewFileInfo(fileName) {
+            if (!currentShare) {
+                showError('请先选择一个共享文件夹');
+                return;
+            }
+            
+            try {
+                console.log('查看文件信息 - 当前共享:', currentShare, '当前路径:', currentPath, '文件名:', fileName);
+                
+                // 构造正确的文件路径
+                let filePath;
+                if (currentPath === '\\') {
+                    // 根目录，直接使用文件名
+                    filePath = fileName;
+                } else if (currentPath.startsWith('\\' + currentShare)) {
+                    // 如果当前路径包含共享名，则提取相对路径
+                    const relativePath = currentPath.substring(('\\' + currentShare).length).replace(/^\\+/, '');
+                    filePath = relativePath ? relativePath + '\\' + fileName : fileName;
+                } else {
+                    // 否则直接拼接
+                    const cleanPath = currentPath.replace(/^\\+/, '').replace(/\\+$/, '');
+                    filePath = cleanPath ? cleanPath + '\\' + fileName : fileName;
+                }
+                
+                console.log('构造的文件路径:', filePath);
+                
+                console.log('ℹ️ [前端调用] 准备调用 pywebview.api.get_file_info');
+                console.log('ℹ️ [前端调用] 参数:', { currentShare, filePath });
+                const result = await pywebview.api.get_file_info(currentShare, filePath);
+                console.log('ℹ️ [前端调用] pywebview.api.get_file_info 返回:', result);
+                
+                if (result.success) {
+                    alert(`文件信息:\n\n名称: ${result.name}\n大小: ${formatFileSize(result.size)}\n创建时间: ${result.created_time}\n修改时间: ${result.modified_time}\n属性: ${result.attributes}`);
+                } else {
+                    showError(`获取文件信息失败: ${result.error}`);
+                }
+            } catch (error) {
+                showError(`获取文件信息错误: ${error.message}`);
+            }
+        }
+
+        // 更新分页
+        function updatePagination(totalItems) {
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+            
+            document.getElementById('prevBtn').disabled = currentPage <= 1;
+            document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+            
+            document.querySelector('.page-info').textContent = 
+                totalItems > 0 ? `第 ${currentPage} 页，共 ${totalPages} 页 (${totalItems} 个项目)` : '第 1 页，共 1 页';
+        }
+
+        // 转义路径中的特殊字符，确保在onclick中正确传递
+        function escapePath(path) {
+            return path.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+
+        // 更新面包屑导航
+        function updateBreadcrumb() {
+            // 解析当前路径，分离共享名和子路径
+            let shareName = '';
+            let subPath = '';
+            
+            if (currentPath && currentPath !== '\\' && currentPath !== '\\\\') {
+                const parts = currentPath.split('\\').filter(p => p);
+                if (parts.length > 0) {
+                    // 第一个部分应该是共享名
+                    shareName = parts[0];
+                    if (parts.length > 1) {
+                        subPath = parts.slice(1).join('\\');
+                    }
+                }
+            }
+            
+            let breadcrumbHTML = '<span class="breadcrumb-item" onclick="navigateToPath(\\\\\\\'\\\\\\\\\\\')"><i class="fas fa-home"></i></span>';
+            
+            if (shareName) {
+                breadcrumbHTML += ' <span>/</span> ';
+                // 转义共享名路径
+                const sharePath = '\\' + shareName;
+                const escapedSharePath = escapePath(sharePath);
+                breadcrumbHTML += `<span class="breadcrumb-item" onclick="navigateToPath('${escapedSharePath}')">${shareName}</span>`;
+                
+                // 如果有子路径，继续添加子路径部分
+                if (subPath) {
+                    const subParts = subPath.split('\\');
+                    let buildSubPath = '';
+                    
+                    for (let i = 0; i < subParts.length; i++) {
+                        buildSubPath += (buildSubPath ? '\\' : '') + subParts[i];
+                        const fullPath = '\\' + shareName + (buildSubPath ? '\\' + buildSubPath : '');
+                        const escapedFullPath = escapePath(fullPath);
+                        breadcrumbHTML += ' <span>/</span> ';
+                        breadcrumbHTML += `<span class="breadcrumb-item" onclick="navigateToPath('${escapedFullPath}')">${subParts[i]}</span>`;
+                    }
+                }
+            }
+            
+            elements.breadcrumb.innerHTML = breadcrumbHTML;
+        }
+
+        // 导航到指定路径
+        function navigateToPath(path) {
+            // 路径已经在HTML中正确转义，直接使用
+            currentPath = path;
+            currentPage = 1;
+            loadFiles(currentPath);
+            updateBreadcrumb();
+        }
+
+        // 获取父目录路径
+        function getParentPath(path) {
+            if (!path || path === '\\' || path === '\\\\') return '\\';
+            
+            const parts = path.split('\\').filter(p => p);
+            parts.pop();
+            
+            if (parts.length === 0) return '\\';
+            
+            return '\\' + parts.join('\\');
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 分页按钮事件
+        document.getElementById('prevBtn').addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                displayFiles();
+            }
+        });
+
+        document.getElementById('nextBtn').addEventListener('click', () => {
+            const totalPages = Math.ceil(allFiles.length / itemsPerPage);
+            if (currentPage < totalPages) {
+                currentPage++;
+                displayFiles();
+            }
+        });
+
+        // 工具栏按钮事件
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            if (currentShare) {
+                loadFiles(currentPath);
+            } else {
+                loadShares();
+            }
+        });
+
+        document.getElementById('uploadBtn').addEventListener('click', () => {
+            if (!currentShare) {
+                showError('请先选择一个共享文件夹');
+                return;
+            }
+            openUploadModal();
+        });
+
+        document.getElementById('disconnectBtn').addEventListener('click', async () => {
+            if (confirm('确定要断开当前连接吗？')) {
+                try {
+                    console.log('🔌 [前端调用] 准备调用 pywebview.api.disconnect');
+                console.log('🔌 [前端调用] 参数: 无');
+                const result = await pywebview.api.disconnect();
+                console.log('🔌 [前端调用] pywebview.api.disconnect 返回:', result);
+                    if (result.success) {
+                        showLoginPage();
+                    } else {
+                        showError(result.error);
+                    }
+                } catch (error) {
+                    showError('断开连接错误: ' + error.message);
+                }
+            }
+        });
+
+        // 上传文件相关功能
+        function openUploadModal() {
+            elements.uploadModal.classList.add('show');
+        }
+
+        function closeUploadModal() {
+            elements.uploadModal.classList.remove('show');
+            elements.uploadPreview.innerHTML = '';
+        }
+
+        // 文件拖拽上传
+        elements.dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            elements.dropArea.classList.add('dragover');
+        });
+
+        elements.dropArea.addEventListener('dragleave', () => {
+            elements.dropArea.classList.remove('dragover');
+        });
+
+        elements.dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            elements.dropArea.classList.remove('dragover');
+            
+            const files = Array.from(e.dataTransfer.files);
+            displayUploadPreview(files);
+        });
+
+        elements.fileInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            displayUploadPreview(files);
+        });
+
+        function displayUploadPreview(files) {
+            const html = files.map(file => `
+                <div class="upload-item" data-filename="${file.name}" data-filesize="${file.size}">
+                    <div>
+                        <strong>${file.name}</strong><br>
+                        <small>大小: ${formatFileSize(file.size)}</small>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 0%"></div>
+                    </div>
+                </div>
+            `).join('');
+            
+            elements.uploadPreview.innerHTML = html;
+        }
+
+        async function startUpload() {
+            const fileInput = document.getElementById('fileInput');
+            const files = Array.from(fileInput.files);
+            
+            if (files.length === 0) {
+                showError('请选择要上传的文件');
+                return;
+            }
+            
+            for (const file of files) {
+                try {
+                    // 显示上传进度
+                    const uploadItem = document.querySelector(`[data-filename="${file.name}"]`);
+                    const progressFill = uploadItem.querySelector('.progress-fill');
+                    
+                    // 读取文件
+                    const fileData = await readFile(file);
+                    
+                    // 构建上传路径
+                    console.log('上传文件 - 当前共享:', currentShare, '当前路径:', currentPath, '文件名:', file.name);
+                
+                // 构造正确的文件路径
+                let filePath;
+                if (currentPath === '\\') {
+                    // 根目录，直接使用文件名
+                    filePath = file.name;
+                } else if (currentPath.startsWith('\\' + currentShare)) {
+                    // 如果当前路径包含共享名，则提取相对路径
+                    const relativePath = currentPath.substring(('\\' + currentShare).length).replace(/^\\+/, '');
+                    filePath = relativePath ? relativePath + '\\' + file.name : file.name;
+                } else {
+                    // 否则直接拼接
+                    const cleanPath = currentPath.replace(/^\\+/, '').replace(/\\+$/, '');
+                    filePath = cleanPath ? cleanPath + '\\' + file.name : file.name;
+                }
+                
+                console.log('构造的文件路径:', filePath);
+                    
+                progressFill.style.width = '50%';
+                
+                // 上传文件
+                console.log('⬆️ [前端调用] 准备调用 pywebview.api.upload_file');
+                    console.log('⬆️ [前端调用] 参数:', { currentShare, filePath, fileData_size: fileData ? fileData.length : 0 });
+                    const result = await pywebview.api.upload_file(currentShare, filePath, fileData);
+                    console.log('⬆️ [前端调用] pywebview.api.upload_file 返回:', result);
+                    
+                    if (result.success) {
+                        progressFill.style.width = '100%';
+                        progressFill.style.background = '#28a745';
+                        showSuccess(`文件 ${file.name} 上传成功！`);
+                    } else {
+                        progressFill.style.width = '100%';
+                        progressFill.style.background = '#dc3545';
+                        showError(`文件 ${file.name} 上传失败: ${result.error}`);
+                    }
+                } catch (error) {
+                    showError(`上传 ${file.name} 时出错: ${error.message}`);
+                }
+            }
+            
+            // 刷新文件列表
+            setTimeout(() => {
+                loadFiles(currentPath);
+                closeUploadModal();
+            }, 2000);
+        }
+
+        function readFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const uint8Array = new Uint8Array(e.target.result);
+                    // 转换为Base64字符串以便JSON序列化 - 分批处理避免栈溢出
+                    const base64 = encodeBase64(uint8Array);
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+        
+        // 分批编码Base64避免栈溢出
+        function encodeBase64(uint8Array) {
+            const chunkSize = 8192; // 8KB chunks
+            let result = '';
+            
+            for (let i = 0; i < uint8Array.length; i += chunkSize) {
+                const chunk = uint8Array.slice(i, i + chunkSize);
+                const binaryString = String.fromCharCode.apply(null, chunk);
+                result += btoa(binaryString);
+            }
+            
+            return result;
+        }
+
+        // 模态框点击外部关闭
+        elements.uploadModal.addEventListener('click', (e) => {
+            if (e.target === elements.uploadModal) {
+                closeUploadModal();
+            }
+        });
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM加载完成，等待PyWebView初始化...');
+            
+            // 设置初始状态
+            toggleConnectionType();
+            toggleAuthType();
+            
+            // 等待PyWebView API可用
+            waitForPyWebView();
+        });
+
+        // 等待PyWebView API初始化完成
+        function waitForPyWebView() {
+            if (typeof pywebview !== 'undefined' && pywebview.api) {
+                console.log('PyWebView API已就绪，应用可以正常使用');
+                console.log('SMB Client GUI 初始化完成！');
+            } else {
+                console.log('等待PyWebView API初始化...');
+                setTimeout(waitForPyWebView, 100);
+            }
+        }
+
+        // 检查PyWebView是否就绪
+        function checkPyWebViewReady() {
+            if (typeof pywebview === 'undefined' || !pywebview.api) {
+                console.error('PyWebView API未就绪');
+                return false;
+            }
+            return true;
+        }
+    </script>
+</body>
+</html>

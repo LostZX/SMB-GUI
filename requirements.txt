@@ -1,0 +1,3 @@
+impacket==0.11.0
+pywebview==4.4.1
+python-dotenv==1.0.0
