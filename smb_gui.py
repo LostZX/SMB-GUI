@@ -75,7 +75,12 @@ class SMBApi:
 
             logger.info("📁 [后端API] 调用smb_handler.list_directory")
             result = self.smb_handler.list_directory(path)
-            logger.info(f"📁 [后端API] smb_handler.list_directory 返回: {result}")
+            if result.get("success"):
+                logger.info(
+                    f"📁 [后端API] list_directory 成功，返回 {len(result.get('files', []))} 条记录"
+                )
+            else:
+                logger.error(f"📁 [后端API] list_directory 失败: {result.get('error')}")
 
             if result["success"]:
                 return {"success": True, "files": result["files"]}

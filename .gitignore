@@ -1,2 +1,4 @@
 .claude/
 claude.md
+__pycache__/
+AGENTS.md

@@ -9,6 +9,8 @@ import logging
 import io
 import os
 import datetime
+import copy
+from cachetools import TTLCache
 from impacket.smbconnection import (
     SMBConnection,
     SMB_DIALECT,
@@ -39,6 +41,9 @@ class SMBHandler:
         self.smb_version = None
         self.current_share = None
         self.current_path = "\\"
+        self.cache_ttl = 300  # 秒
+        self.cache_max_entries = 256
+        self.directory_cache = TTLCache(maxsize=self.cache_max_entries, ttl=self.cache_ttl)
 
     def connect(self, connection_string):
         """
@@ -138,11 +143,21 @@ class SMBHandler:
             if not path.endswith("\\"):
                 path = path + "\\"
 
+            cache_key = self._normalize_cache_key(path)
+            cached_result = self._get_cached_directory(cache_key)
+            if cached_result:
+                logger.info(f"[缓存命中] 路径: {path}")
+                return cached_result
+
+            logger.info(f"[缓存未命中] 路径: {path}，准备发起网络请求")
             logger.info(f"列出目录内容: {path}")
 
             # 获取共享列表
             if path == "\\" or path == "\\\\":
-                return self._list_shares()
+                result = self._list_shares()
+                if result.get("success"):
+                    self._set_directory_cache(cache_key, result)
+                return result
 
             # 解析路径，提取共享名称和相对路径
             share_name, relative_path = self._parse_path(path)
@@ -172,7 +187,6 @@ class SMBHandler:
 
                 # 获取文件/目录列表
                 file_list = self.smb.listPath(share_name, list_path)
-                logger.info(f"listPath返回 {len(file_list)} 个项目")
 
                 # 处理每个文件/目录
                 files = []
@@ -211,14 +225,17 @@ class SMBHandler:
                         ),
                     }
                     files.append(file_info)
-                    logger.info(
+                    logger.debug(
                         f"添加文件: {file_info['name']} ({'目录' if file_info['is_directory'] else '文件'})"
                     )
 
                 # 文件夹前置排序
                 files.sort(key=lambda x: (not x["is_directory"], x["name"]))
 
-                return {"success": True, "files": files}
+                result = {"success": True, "files": files}
+                logger.info(f"[网络请求完成] {share_name}\\{relative_path or ''} -> {len(files)} 条记录")
+                self._set_directory_cache(cache_key, result)
+                return result
 
             except Exception as e:
                 logger.error(f"连接共享或列出文件失败: {e}")
@@ -413,6 +430,8 @@ class SMBHandler:
 
             logger.info(f"成功上传文件，大小: {len(file_data)} 字节")
 
+            self._invalidate_parent_directory_cache(share_name, file_path)
+
             return {"success": True, "size": len(file_data)}
 
         except Exception as e:
@@ -447,12 +466,73 @@ class SMBHandler:
             self.smb.deleteFile(share_name, normalized_path)
             logger.info("文件删除成功")
 
+            self._invalidate_parent_directory_cache(share_name, file_path)
+
             return {"success": True, "message": "文件已删除"}
 
         except Exception as e:
             error_msg = f"删除文件失败: {str(e)}"
             logger.error(error_msg)
             return {"success": False, "error": error_msg}
+
+    def _normalize_cache_key(self, path):
+        if not path or path in ("\\", "\\\\"):
+            return "__root__"
+
+        normalized = path.replace("/", "\\")
+        while "\\\\" in normalized:
+            normalized = normalized.replace("\\\\", "\\")
+
+        if not normalized.startswith("\\"):
+            normalized = "\\" + normalized
+        if not normalized.endswith("\\"):
+            normalized = normalized + "\\"
+
+        return normalized.lower()
+
+    def _get_cached_directory(self, cache_key):
+        if not cache_key:
+            return None
+
+        try:
+            data = self.directory_cache[cache_key]
+            return copy.deepcopy(data)
+        except KeyError:
+            return None
+
+    def _set_directory_cache(self, cache_key, data):
+        if not cache_key or not isinstance(data, dict):
+            return
+
+        self.directory_cache[cache_key] = copy.deepcopy(data)
+        logger.info(f"[缓存写入] key={cache_key}")
+
+    def _invalidate_cache_key(self, cache_key):
+        if cache_key in self.directory_cache:
+            logger.info(f"缓存失效 key={cache_key}")
+            self.directory_cache.pop(cache_key, None)
+
+    def _invalidate_parent_directory_cache(self, share_name, file_path):
+        cache_path = self._build_directory_cache_path(share_name, file_path)
+        if cache_path:
+            cache_key = self._normalize_cache_key(cache_path)
+            self._invalidate_cache_key(cache_key)
+
+    def _build_directory_cache_path(self, share_name, file_path):
+        if not share_name:
+            return None
+
+        relative_path = file_path.replace("/", "\\").strip("\\") if file_path else ""
+        directory_part = ""
+        if relative_path:
+            parts = relative_path.split("\\")
+            if len(parts) > 1:
+                directory_part = "\\".join(parts[:-1])
+
+        if directory_part:
+            return f"\\{share_name}\\{directory_part}\\"
+        else:
+            return f"\\{share_name}\\"
 
     def get_file_info(self, share_name, file_path):
         """
@@ -524,17 +604,17 @@ class SMBHandler:
         except Exception as e:
             logger.error(f"断开连接时出错: {str(e)}")
 
-        self.smb = None
-        self.connected = False
-        self.domain = None
-        self.username = None
-        self.password = None
-        self.host = None
-        self.address = None
-        self.port = None
-        self.lmhash = None
-        self.nthash = None
-        self.session = None
-        self.smb_version = None
-        self.current_share = None
-        self.current_path = "\\"
+            self.smb = None
+            self.connected = False
+            self.domain = None
+            self.username = None
+            self.password = None
+            self.host = None
+            self.address = None
+            self.port = None
+            self.lmhash = None
+            self.nthash = None
+            self.session = None
+            self.smb_version = None
+            self.current_share = None
+            self.current_path = "\\"

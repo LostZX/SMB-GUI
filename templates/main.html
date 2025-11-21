@@ -2176,8 +2176,10 @@
             // 刷新文件列表
             setTimeout(() => {
                 loadFiles(currentPath);
+            }, 1000);
+            setTimeout(() => {
                 closeUploadModal();
-            }, 2000);
+            }, 1000);
         }
 
         function readFile(file) {
