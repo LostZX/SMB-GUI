@@ -186,6 +186,28 @@ class SMBApi:
             logger.error(f"上传文件错误: {str(e)}")
             return {"success": False, "error": str(e)}
 
+    def delete_file(self, share_name, file_path):
+        """删除文件"""
+        try:
+            logger.info("🗑️ [后端API] delete_file 函数被调用")
+            logger.info(
+                f"🗑️ [后端API] 参数: share_name={share_name}, file_path={file_path}"
+            )
+
+            if not self.smb_handler:
+                logger.error("🗑️ [后端API] 未连接到SMB服务器")
+                return {"success": False, "error": "未连接到SMB服务器"}
+
+            logger.info("🗑️ [后端API] 调用smb_handler.delete_file")
+            result = self.smb_handler.delete_file(share_name, file_path)
+            logger.info(f"🗑️ [后端API] smb_handler.delete_file 返回: {result}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"删除文件错误: {str(e)}")
+            return {"success": False, "error": str(e)}
+
     def get_file_info(self, share_name, file_path):
         """获取文件信息"""
         try:
@@ -306,7 +328,7 @@ def main():
         # 开启debug模式以便调试
         # PyWebView会在页面加载完成后自动让前端JavaScript运行
         # 前端的waitForPyWebView()函数会检测API何时可用
-        webview.start(debug=False)
+        webview.start(debug=True)
     except Exception as e:
         print(f"[ERROR] 启动失败: {e}")
         sys.exit(1)

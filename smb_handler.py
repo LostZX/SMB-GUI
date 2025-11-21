@@ -420,6 +420,40 @@ class SMBHandler:
             logger.error(error_msg)
             return {"success": False, "error": error_msg}
 
+    def delete_file(self, share_name, file_path):
+        """
+        删除文件
+
+        Args:
+            share_name (str): 共享名称
+            file_path (str): 文件路径
+
+        Returns:
+            dict: 删除结果
+        """
+        try:
+            if not self.connected or not self.smb:
+                return {"success": False, "error": "未连接到服务器"}
+
+            logger.info(f"删除文件: {share_name}\\{file_path}")
+
+            # 连接到共享
+            self.smb.connectTree(share_name)
+
+            # 统一路径格式
+            normalized_path = file_path.replace("/", "\\").lstrip("\\")
+
+            # 删除文件
+            self.smb.deleteFile(share_name, normalized_path)
+            logger.info("文件删除成功")
+
+            return {"success": True, "message": "文件已删除"}
+
+        except Exception as e:
+            error_msg = f"删除文件失败: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+
     def get_file_info(self, share_name, file_path):
         """
         获取文件详细信息

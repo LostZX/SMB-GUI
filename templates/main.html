@@ -963,6 +963,63 @@
         let itemsPerPage = 10;
         let allFiles = [];
         let connectionInfo = {};
+        let dismissActionModal = null;
+        let pywebviewReady = false;
+        let resolvePyWebViewReady;
+        let pywebviewPollerId = null;
+        const pywebviewReadyPromise = new Promise((resolve) => {
+            resolvePyWebViewReady = resolve;
+        });
+
+        function markPyWebViewReady(source = 'unknown') {
+            if (pywebviewReady) {
+                console.log(`[PyWebView] 已处于就绪状态（触发源: ${source}）`);
+                return;
+            }
+            pywebviewReady = true;
+            console.log(`[PyWebView] API 就绪（触发源: ${source}）`);
+            if (typeof resolvePyWebViewReady === 'function') {
+                resolvePyWebViewReady();
+            }
+            if (pywebviewPollerId !== null) {
+                clearInterval(pywebviewPollerId);
+                pywebviewPollerId = null;
+            }
+        }
+
+        if (typeof window !== 'undefined') {
+            if (typeof window.pywebview !== 'undefined' && window.pywebview.api) {
+                markPyWebViewReady('脚本加载时');
+            } else {
+                const previousHandler = window.pywebviewready;
+                window.pywebviewready = function() {
+                    if (typeof previousHandler === 'function') {
+                        try {
+                            previousHandler();
+                        } catch (err) {
+                            console.warn('原 pywebviewready 处理函数执行异常:', err);
+                        }
+                    }
+                    markPyWebViewReady('pywebviewready 回调');
+                };
+
+                pywebviewPollerId = setInterval(() => {
+                    if (typeof window.pywebview !== 'undefined' && window.pywebview.api) {
+                        markPyWebViewReady('轮询检测');
+                    }
+                }, 100);
+
+                setTimeout(() => {
+                    if (!pywebviewReady) {
+                        console.warn('PyWebView 仍未就绪，继续等待...');
+                    }
+                }, 3000);
+            }
+        }
+
+        function ensurePyWebViewReady() {
+            return pywebviewReadyPromise;
+        }
 
         // DOM元素
         const elements = {
@@ -984,42 +1041,60 @@
 
         // 连接方式切换
         function toggleConnectionType() {
-            const connectionType = document.getElementById('connectionType').value;
+            const connectionTypeSelect = document.getElementById('connectionType');
             const manualForm = document.getElementById('manualForm');
             const connectionStringForm = document.getElementById('connectionStringForm');
             const manualAuth = document.getElementById('manualAuth');
+            const serverInput = document.getElementById('server');
+            const connectionStringInput = document.getElementById('connectionString');
+
+            if (!connectionTypeSelect || !manualForm || !connectionStringForm || !manualAuth) {
+                // 当前界面未启用手动/连接字符串切换，直接返回
+                return;
+            }
+
+            const connectionType = connectionTypeSelect.value;
             
             if (connectionType === 'manual') {
                 manualForm.classList.remove('hidden');
                 connectionStringForm.classList.add('hidden');
                 manualAuth.style.display = 'block';
-                document.getElementById('server').required = true;
-                document.getElementById('connectionString').required = false;
+                if (serverInput) serverInput.required = true;
+                if (connectionStringInput) connectionStringInput.required = false;
             } else {
                 manualForm.classList.add('hidden');
                 connectionStringForm.classList.remove('hidden');
                 manualAuth.style.display = 'none';
-                document.getElementById('server').required = false;
-                document.getElementById('connectionString').required = true;
+                if (serverInput) serverInput.required = false;
+                if (connectionStringInput) connectionStringInput.required = true;
             }
         }
 
         // 认证方式切换
         function toggleAuthType() {
-            const authType = document.getElementById('authType').value;
+            const authTypeSelect = document.getElementById('authType');
             const passwordGroup = document.getElementById('passwordGroup');
             const hashGroup = document.getElementById('hashGroup');
+            const passwordInput = document.getElementById('password');
+            const hashInput = document.getElementById('hash');
+
+            if (!authTypeSelect || !passwordGroup || !hashGroup) {
+                // 当前界面未启用密码/哈希切换，直接返回
+                return;
+            }
+
+            const authType = authTypeSelect.value;
             
             if (authType === 'password') {
                 passwordGroup.classList.remove('hidden');
                 hashGroup.classList.add('hidden');
-                document.getElementById('password').required = false;
-                document.getElementById('hash').required = false;
+                if (passwordInput) passwordInput.required = false;
+                if (hashInput) hashInput.required = false;
             } else {
                 passwordGroup.classList.add('hidden');
                 hashGroup.classList.remove('hidden');
-                document.getElementById('password').required = false;
-                document.getElementById('hash').required = true;
+                if (passwordInput) passwordInput.required = false;
+                if (hashInput) hashInput.required = true;
             }
         }
 
@@ -1052,7 +1127,8 @@
         elements.loginForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            // 检查PyWebView是否可用
+            // 等待PyWebView API就绪
+            await ensurePyWebViewReady();
             if (!checkPyWebViewReady()) {
                 showError('系统未就绪，请稍后再试');
                 return;
@@ -1344,25 +1420,50 @@
                 showTempMessage(`文件${reason}，建议下载到本地查看`, 2000);
             }
         }
+
+        // 构建SMB路径
+        function buildRemoteFilePath(fileName) {
+            if (!fileName) {
+                return '';
+            }
+
+            if (!currentShare || !currentPath || currentPath === '\\' || currentPath === '\\\\') {
+                return fileName;
+            }
+
+            const shareRoot = '\\' + currentShare;
+            if (currentPath.startsWith(shareRoot)) {
+                const relativePath = currentPath
+                    .substring(shareRoot.length)
+                    .replace(/^\\+/, '')
+                    .replace(/\\+$/, '');
+                return relativePath ? `${relativePath}\\${fileName}` : fileName;
+            }
+
+            const cleanPath = currentPath.replace(/^\\+/, '').replace(/\\+$/, '');
+            return cleanPath ? `${cleanPath}\\${fileName}` : fileName;
+        }
         
         // 显示临时消息（2秒后自动消失）
-        function showTempMessage(message, duration = 2000) {
+        function showTempMessage(message, duration = 2000, type = 'info') {
             // 创建消息元素
             const messageEl = document.createElement('div');
             messageEl.className = 'temp-message';
             messageEl.textContent = message;
+            const isSuccess = type === 'success';
             messageEl.style.cssText = `
                 position: fixed;
-                top: 20px;
-                right: 20px;
-                background: #ff9800;
-                color: white;
-                padding: 12px 20px;
-                border-radius: 8px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                top: 25px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: ${isSuccess ? 'linear-gradient(135deg, #2ecc71, #27ae60)' : '#ff9800'};
+                color: #fff;
+                padding: ${isSuccess ? '18px 40px' : '14px 28px'};
+                border-radius: ${isSuccess ? '18px' : '12px'};
+                box-shadow: ${isSuccess ? '0 18px 40px rgba(39, 174, 96, 0.35)' : '0 4px 20px rgba(0,0,0,0.15)'};
                 z-index: 10000;
-                font-size: 14px;
-                max-width: 300px;
+                font-size: ${isSuccess ? '16px' : '14px'};
+                max-width: ${isSuccess ? '420px' : '360px'};
                 word-wrap: break-word;
             `;
             
@@ -1389,6 +1490,11 @@
 
         // 显示文件操作菜单
         function showFileActionMenu(fileName) {
+            if (typeof dismissActionModal === 'function') {
+                dismissActionModal();
+                dismissActionModal = null;
+            }
+
             // 检查文件大小和类型
             const file = allFiles.find(f => f.name === fileName);
             if (!file) return;
@@ -1418,13 +1524,16 @@
             options += `<button class="btn btn-info" onclick="viewFileInfo('${fileName}')">
                 <i class="fas fa-info-circle"></i> 详情
             </button>`;
+            options += `<button class="btn btn-danger" onclick="confirmDeleteFile('${fileName}', false)">
+                <i class="fas fa-trash-alt"></i> 删除
+            </button>`;
             
             // 简单的模态框显示选项
             const modal = document.createElement('div');
             modal.style.cssText = `
                 position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                background: white; padding: 20px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-                z-index: 1000; max-width: 400px; text-align: center;
+                background: white; padding: 30px; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+                z-index: 1000; width: min(520px, 90vw); text-align: center;
             `;
             modal.innerHTML = `
                 <h3>文件操作: ${fileName}</h3>
@@ -1450,6 +1559,7 @@
                     if (modal && modal.parentNode) {
                         modal.parentNode.removeChild(modal);
                     }
+                    dismissActionModal = null;
                 } catch (e) {
                     console.warn('移除模态框时出错:', e);
                 }
@@ -1459,6 +1569,7 @@
             
             document.body.appendChild(overlay);
             document.body.appendChild(modal);
+            dismissActionModal = safeRemoveModal;
             
             // 修改取消按钮的点击事件
             setTimeout(() => {
@@ -1495,20 +1606,7 @@
                 showSuccess('开始下载文件...');
                 console.log('下载文件 - 当前共享:', currentShare, '当前路径:', currentPath, '文件名:', fileName);
                 
-                // 构造正确的文件路径
-                let filePath;
-                if (currentPath === '\\') {
-                    // 根目录，直接使用文件名
-                    filePath = fileName;
-                } else if (currentPath.startsWith('\\' + currentShare)) {
-                    // 如果当前路径包含共享名，则提取相对路径
-                    const relativePath = currentPath.substring(('\\' + currentShare).length).replace(/^\\+/, '');
-                    filePath = relativePath ? relativePath + '\\' + fileName : fileName;
-                } else {
-                    // 否则直接拼接
-                    const cleanPath = currentPath.replace(/^\\+/, '').replace(/\\+$/, '');
-                    filePath = cleanPath ? cleanPath + '\\' + fileName : fileName;
-                }
+                const filePath = buildRemoteFilePath(fileName);
                 
                 console.log('构造的文件路径:', filePath);
                 
@@ -1540,20 +1638,7 @@
             try {
                 console.log('查看文件 - 当前共享:', currentShare, '当前路径:', currentPath, '文件名:', fileName);
                 
-                // 构造正确的文件路径
-                let filePath;
-                if (currentPath === '\\') {
-                    // 根目录，直接使用文件名
-                    filePath = fileName;
-                } else if (currentPath.startsWith('\\' + currentShare)) {
-                    // 如果当前路径包含共享名，则提取相对路径
-                    const relativePath = currentPath.substring(('\\' + currentShare).length).replace(/^\\+/, '');
-                    filePath = relativePath ? relativePath + '\\' + fileName : fileName;
-                } else {
-                    // 否则直接拼接
-                    const cleanPath = currentPath.replace(/^\\+/, '').replace(/\\+$/, '');
-                    filePath = cleanPath ? cleanPath + '\\' + fileName : fileName;
-                }
+                const filePath = buildRemoteFilePath(fileName);
                 
                 console.log('构造的文件路径:', filePath);
                 
@@ -1715,20 +1800,7 @@
             try {
                 console.log('查看文件信息 - 当前共享:', currentShare, '当前路径:', currentPath, '文件名:', fileName);
                 
-                // 构造正确的文件路径
-                let filePath;
-                if (currentPath === '\\') {
-                    // 根目录，直接使用文件名
-                    filePath = fileName;
-                } else if (currentPath.startsWith('\\' + currentShare)) {
-                    // 如果当前路径包含共享名，则提取相对路径
-                    const relativePath = currentPath.substring(('\\' + currentShare).length).replace(/^\\+/, '');
-                    filePath = relativePath ? relativePath + '\\' + fileName : fileName;
-                } else {
-                    // 否则直接拼接
-                    const cleanPath = currentPath.replace(/^\\+/, '').replace(/\\+$/, '');
-                    filePath = cleanPath ? cleanPath + '\\' + fileName : fileName;
-                }
+                const filePath = buildRemoteFilePath(fileName);
                 
                 console.log('构造的文件路径:', filePath);
                 
@@ -1745,6 +1817,121 @@
             } catch (error) {
                 showError(`获取文件信息错误: ${error.message}`);
             }
+        }
+
+        // 删除文件
+        async function confirmDeleteFile(fileName, isDirectory) {
+            if (isDirectory) {
+                showError('暂不支持删除文件夹');
+                return;
+            }
+
+            if (!currentShare) {
+                showError('请先选择一个共享文件夹');
+                return;
+            }
+
+            if (typeof dismissActionModal === 'function') {
+                dismissActionModal();
+                dismissActionModal = null;
+            }
+
+            const filePath = buildRemoteFilePath(fileName);
+
+            const performDelete = async () => {
+                try {
+                    console.log('🗑️ [前端调用] 准备删除文件:', { currentShare, currentPath, fileName });
+                    console.log('🗑️ [前端调用] 删除文件路径:', filePath);
+                    const result = await pywebview.api.delete_file(currentShare, filePath);
+                    console.log('🗑️ [前端调用] pywebview.api.delete_file 返回:', result);
+
+                    if (result.success) {
+                        showSuccess(`文件 ${fileName} 删除成功`);
+                        showTempMessage(`文件 "${fileName}" 删除成功`, 2000, 'success');
+                        await loadFiles(currentPath);
+                        return true;
+                    } else {
+                        showError(`删除失败: ${result.error}`);
+                        return false;
+                    }
+                } catch (error) {
+                    showError(`删除错误: ${error.message}`);
+                    return false;
+                }
+            };
+
+            openConfirmModal({
+                title: '确认删除',
+                message: `确定要删除文件 <strong>${fileName}</strong> 吗？该操作无法恢复。`,
+                confirmText: '删除',
+                cancelText: '取消',
+                onConfirm: performDelete,
+            });
+        }
+
+        function openConfirmModal({ title, message, confirmText = '确定', cancelText = '取消', onConfirm }) {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.55);
+                z-index: 1200;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                background: white;
+                padding: 32px;
+                border-radius: 18px;
+                width: min(480px, 90vw);
+                box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
+                text-align: center;
+            `;
+            modal.innerHTML = `
+                <h3 style="margin-bottom: 12px;">${title}</h3>
+                <p style="color: #555; line-height: 1.5; margin-bottom: 24px;">${message}</p>
+                <div style="display: flex; gap: 12px; justify-content: center;">
+                    <button class="btn btn-secondary" id="confirmCancelBtn">${cancelText}</button>
+                    <button class="btn btn-danger" id="confirmOkBtn">${confirmText}</button>
+                </div>
+            `;
+
+            const closeModal = () => {
+                if (overlay.parentNode) {
+                    overlay.parentNode.removeChild(overlay);
+                }
+            };
+
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    closeModal();
+                }
+            });
+
+            const cancelBtn = modal.querySelector('#confirmCancelBtn');
+            const confirmBtn = modal.querySelector('#confirmOkBtn');
+
+            cancelBtn.onclick = closeModal;
+            confirmBtn.onclick = async () => {
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = '处理中...';
+                const success = await onConfirm();
+                if (success) {
+                    closeModal();
+                } else {
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = confirmText;
+                }
+            };
+
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
         }
 
         // 更新分页
@@ -1956,31 +2143,17 @@
                     
                     // 读取文件
                     const fileData = await readFile(file);
-                    
+                
                     // 构建上传路径
                     console.log('上传文件 - 当前共享:', currentShare, '当前路径:', currentPath, '文件名:', file.name);
-                
-                // 构造正确的文件路径
-                let filePath;
-                if (currentPath === '\\') {
-                    // 根目录，直接使用文件名
-                    filePath = file.name;
-                } else if (currentPath.startsWith('\\' + currentShare)) {
-                    // 如果当前路径包含共享名，则提取相对路径
-                    const relativePath = currentPath.substring(('\\' + currentShare).length).replace(/^\\+/, '');
-                    filePath = relativePath ? relativePath + '\\' + file.name : file.name;
-                } else {
-                    // 否则直接拼接
-                    const cleanPath = currentPath.replace(/^\\+/, '').replace(/\\+$/, '');
-                    filePath = cleanPath ? cleanPath + '\\' + file.name : file.name;
-                }
-                
-                console.log('构造的文件路径:', filePath);
+                    const filePath = buildRemoteFilePath(file.name);
                     
-                progressFill.style.width = '50%';
+                    console.log('构造的文件路径:', filePath);
+                    
+                    progressFill.style.width = '50%';
                 
-                // 上传文件
-                console.log('⬆️ [前端调用] 准备调用 pywebview.api.upload_file');
+                    // 上传文件
+                    console.log('⬆️ [前端调用] 准备调用 pywebview.api.upload_file');
                     console.log('⬆️ [前端调用] 参数:', { currentShare, filePath, fileData_size: fileData ? fileData.length : 0 });
                     const result = await pywebview.api.upload_file(currentShare, filePath, fileData);
                     console.log('⬆️ [前端调用] pywebview.api.upload_file 返回:', result);
@@ -1989,6 +2162,7 @@
                         progressFill.style.width = '100%';
                         progressFill.style.background = '#28a745';
                         showSuccess(`文件 ${file.name} 上传成功！`);
+                        showTempMessage(`文件 "${file.name}" 上传成功`, 2000, 'success');
                     } else {
                         progressFill.style.width = '100%';
                         progressFill.style.background = '#dc3545';
@@ -2055,18 +2229,19 @@
 
         // 等待PyWebView API初始化完成
         function waitForPyWebView() {
-            if (typeof pywebview !== 'undefined' && pywebview.api) {
-                console.log('PyWebView API已就绪，应用可以正常使用');
-                console.log('SMB Client GUI 初始化完成！');
-            } else {
-                console.log('等待PyWebView API初始化...');
-                setTimeout(waitForPyWebView, 100);
-            }
+            ensurePyWebViewReady()
+                .then(() => {
+                    console.log('PyWebView API已就绪，应用可以正常使用');
+                    console.log('SMB Client GUI 初始化完成！');
+                })
+                .catch((err) => {
+                    console.error('等待 PyWebView 就绪过程中出错:', err);
+                });
         }
 
         // 检查PyWebView是否就绪
         function checkPyWebViewReady() {
-            if (typeof pywebview === 'undefined' || !pywebview.api) {
+            if (!pywebviewReady || typeof pywebview === 'undefined' || !pywebview.api) {
                 console.error('PyWebView API未就绪');
                 return false;
             }
